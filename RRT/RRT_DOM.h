@@ -8,8 +8,6 @@
 #include <string>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-#include <eigen3/Eigen/Dense>
-#include <eigen3/Eigen/Eigenvalues>
 
 using namespace cv;
 using namespace std;
@@ -64,11 +62,8 @@ public:
             rand_pos.x = rand() / div_width;
             rand_pos.y = rand() / div_height;
 
-            cout << "*****-->CUR_GRAPH_SIZE " << CUR_GRAPH_SIZE << '\n';
             RRTNode* nearest_node = NearestNode(rand_pos);
-            // cout << "Nearest_node address: " << nearest_node << " --> pos "<< nearest_node->pos << '\n';
             RRTNode* new_node = AddNewNode(nearest_node, rand_pos);
-            cout << "Added new node address: " << new_node << " --> pos " << new_node->pos << '\n';
             if (norm(new_node->pos - target_pos_) <= error_dis_) {
                 cout << "Find path!!!\n";
                 graph_end_->parent= new_node;
@@ -79,11 +74,9 @@ public:
             circle(source_img, target_pos_, 5, Scalar(0,0,255), -1);
             circle(source_img, new_node->pos, 3, Scalar(0,255,0), -1);
             imshow("RRT path planning", source_img);
-            waitKey(10);
-            // float temp_dis = norm(new_node->pos - target_pos_);
-            // min_dis_to_target = min(min_dis_to_target, temp_dis);
-            // cout << "Current min distance to target: " << min_dis_to_target << '\n';
+            waitKey(1);
             CUR_GRAPH_SIZE++;
+            cout << "CUR_GRAPH_SIZE: " << CUR_GRAPH_SIZE << '\n';
         }
         cout << "MAX_GRAPH_SIZE: " << MAX_GRAPH_SIZE << " is achieved with no path founded.\n";
         return false;
@@ -92,39 +85,23 @@ public:
     RRTNode* NearestNode(Point2f& rand_node) {
         RRTNode* res = search_graph_;
         queue<RRTNode*> level_pt;
+        level_pt.push(search_graph_);
         float min_dis = norm(rand_node - search_graph_->pos), cur_dis;
-        // cout << "Pushed node pointer:\n";
-        for (auto pt : search_graph_->adjacency_list) {
-            level_pt.push(pt);
-            // cout << pt << '\n';
-        }
         
         // bfs
-        // cout << "search_graph_: " << search_graph_ << '\n';
         while (!level_pt.empty()) {
-            queue<RRTNode*> tempQueue = level_pt;
-            // cout << "RRTNode queue size: " << tempQueue.size() << "\n";
-            // while(!tempQueue.empty()) {
-            //    if (!tempQueue.front()->adjacency_list.empty())
-            //        cout << tempQueue.front() << "\n";
-            //    tempQueue.pop();
-            //}
-
             int level_size = level_pt.size();
             for (int i = 0; i < level_size; i++) {
                 RRTNode* cur_node = level_pt.front();
                 level_pt.pop();
-
-                // cout << "Current Node Position: " << cur_node->pos << '\n';
-                // cout << "Current Node adjacency_list: \n";
                 for (auto pt : cur_node->adjacency_list) {
                     level_pt.push(pt);
-                    // cout << pt << ' ';
                 }
                 cur_dis = norm(rand_node - cur_node->pos);
-                // cout << "\nCurrent distance " << cur_dis << '\n';
-                if (cur_dis < min_dis)
+                if (cur_dis < min_dis) {
                     res = cur_node;
+                    min_dis = cur_dis;
+                }
             }
         }
         return res;

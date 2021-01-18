@@ -40,14 +40,14 @@ public:
 
     RRTStarPlanner(): graph_start_(nullptr), graph_end_(nullptr) {}
     RRTStarPlanner(Point2f start, Point2f target, vector<PolyObstacle> obs, float step_len = 10, 
-                   float error_dis = 10, float radius = 10,
+                   float radius = 10, float error_dis = 10,
                    Size2f config_size = Size2f(640, 480)): 
         start_pos_(start), 
         target_pos_(target), 
         obstacles_(obs),
         step_len_(step_len), 
-        error_dis_(error_dis),
         radius_(radius),
+        error_dis_(error_dis),
         config_size_(config_size) {
         graph_start_ = new RRTStarNode(start);
         graph_end_ = new RRTStarNode(target);
@@ -69,7 +69,15 @@ public:
             rand_pos.x = rand() / div_width;
             rand_pos.y = rand() / div_height;
 
+            if (CUR_GRAPH_SIZE % 20 == 0) {
+                rand_pos = target_pos_;
+                CUR_GRAPH_SIZE++;
+            }
+
             RRTStarNode* nearest_node = NearestNode(rand_pos);
+            if (norm(nearest_node->pos - rand_pos) < radius_ / 10)
+                continue;
+
             RRTStarNode* new_node = AddNewNode(nearest_node, rand_pos);
             if (PathObstacleFree(nearest_node, new_node)) {
                     rewire(nearest_node, new_node, source_img);
@@ -87,13 +95,14 @@ public:
                 delete new_node;
             rectangle(source_img, Point(310, 0), Point(330, 200), Scalar(0, 0, 0), 2);
             rectangle(source_img, Point(310, 280), Point(330, 480), Scalar(0, 0, 0), 2);
+            rectangle(source_img, Point(500, 280), Point(520, 480), Scalar(0, 0, 0), 2);
             circle(source_img, start_pos_, 5, Scalar(255,0,0), -1);
             circle(source_img, target_pos_, 5, Scalar(255,0,0), -1);
             //line(source_img, rand_pos, nearest_node->pos, Scalar(0, 0, 255), 1);
             //circle(source_img, rand_pos, 3, Scalar(0, 255, 0), -1);
             // line(source_img, pre_rand_pos, 5, Scalar(255, 255, 255), -1);
             imshow("RRT path planning", source_img);
-            waitKey(40);
+            waitKey(2);
             pre_rand_pos = rand_pos;
             cout << "-->CUR_GRAPH_SIZE " << CUR_GRAPH_SIZE << '\n';
         }
@@ -122,8 +131,10 @@ public:
                     level_pt.push(pt);
                 }
                 cur_dis = norm(rand_node - cur_node->pos);
-                if (cur_dis < min_dis)
+                if (cur_dis < min_dis) {
                     res = cur_node;
+                    min_dis = cur_dis;
+                }
             }
         }
         return res;

@@ -2,7 +2,7 @@
 #include "opencv2/imgproc.hpp"
 #include "opencv2/videoio.hpp"
 #include "opencv2/highgui.hpp"
-#include "RRT_DOM.h"
+#include "RRTStar_DOM_debug.h"
 #include <iostream>
 #include <string>
 #include <ctype.h>
@@ -55,8 +55,8 @@ int main( int argc, char** argv) {
     Mat frame, gray;
     TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.03);
     vector<Point2f> points;
-    RRTPlanner rrtPlanner;
-    vector<RRTNode*> path;    
+    RRTStarPlanner planner;
+    vector<RRTStarNode*> path;    
     bool planned = false;
     for(;;) {
         cap >> frame;
@@ -71,10 +71,11 @@ int main( int argc, char** argv) {
             addRemovePt = false;
         }
         if (points.size() == 2 && !planned) {
-            rrtPlanner = RRTPlanner(points[0], points[1], 10, 10);
+            vector<PolyObstacle> obses;
+            planner = RRTStarPlanner(points[0], points[1], obses);
             cout << "Planning...\n";
-            planned = rrtPlanner.Plan(frame);
-            path = rrtPlanner.GetPath();
+            planned = planner.Plan(frame);
+            path = planner.GetPath();
         }
 
         if (points.size() == 2) {
