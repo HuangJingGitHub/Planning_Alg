@@ -108,7 +108,7 @@ public:
                 cv_ref_pt_2(ref_pos[4], ref_pos[5]),
                 cv_pt_1, cv_pt_2;
         
-        bool CW_CCW = true; // clockwise / counter clockwise direcrion 
+        bool CW_CCW = true; // clockwise / counter clockwise direction 
         int parameter_cnt;
         if (shape_constraint_active == false)
             shape_ratio_constraint = 0;
