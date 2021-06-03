@@ -1,11 +1,9 @@
 #include <string>
 #include <vector>
-#include <opencv2/video/tracking.hpp>
 #include <opencv2/core.hpp>
-#include <opencv2/videoio.hpp>
 #include <opencv2/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/imgcodecs.hpp>
+#include <opencv2/video/tracking.hpp>
+#include <eigen3/Eigen/Dense>
 
 using namespace std;
 using namespace cv;
@@ -31,29 +29,34 @@ class LK_Tracker {
 public: 
     string window_to_track_;
     TermCriteria termiantion_criteria_;
-    int max_count_;
+    static const int points_num_ = 3;  // Determination of Jd size needs a constexpr
     vector<Point2f> points_[2];
     vector<Point2f> ee_points_[2];
     Scalar points_color_;
     Scalar ee_points_color_;
-    Mat original_img_;
     Mat pre_gary_img_;
     Mat next_gray_img_;
+
+    Eigen::MatrixXf pre_Jd_;
+    Eigen::MatrixXf cur_Jd_;
+    float update_rate_;
+    bool Jd_initialized_ = false;
 
     LK_Tracker() {}
     LK_Tracker(const string win_name) {
         window_to_track_ = win_name;
         termiantion_criteria_ = TermCriteria(TermCriteria::COUNT | TermCriteria::EPS, 20, 0.03);
-        max_count_ = 3;
         points_color_ = Scalar(255, 0, 0);
         ee_points_color_ = Scalar(0, 255, 0);
+
+        update_rate_ = 0.15;
+        pre_Jd_ = Eigen::Matrix<float, points_num_ * 2, 2>::Ones();
     }
 
     void Track(Mat& image, Mat& input_gray_img) {
-        original_img_ = image;  // Just create a matrix header to the original image.
         next_gray_img_ = input_gray_img;
         setMouseCallback(window_to_track_, onMouse, 0);
-        if (add_remove_pt && points_[0].size() < (size_t) max_count_) {
+        if (add_remove_pt && points_[0].size() < (size_t) points_num_) {
             vector<Point2f> temp;
             temp.push_back(feedback_pt_picked);
             cornerSubPix(next_gray_img_, temp, Size(11, 11), Size(-1, -1), termiantion_criteria_);
@@ -78,7 +81,7 @@ public:
 
 
     void InvokeLK(Mat& pre_gray_img, Mat& next_gray_img, vector<Point2f>& pre_pts, vector<Point2f>& next_pts,
-                    Mat& display_img, Scalar& pt_color) {
+                Mat& display_img, Scalar& pt_color) {
         vector<uchar> status;
         vector<float> error;
         if (pre_gray_img.empty())
@@ -101,7 +104,33 @@ public:
         }
         next_pts.resize(k);   
         std::swap(pre_pts, next_pts);     
-    }   
+    }
+
+    
+    void UpdateJd() {
+        if (!(points_[0].size() == points_num_ && points_[1].size() == points_num_)
+            || !(ee_points_[0].size() == 1 && ee_points_[1].size() == 1)) {
+                cout << "Unsuccessful tracking. No update of deformation Jacobian performaed.\n";
+                return;
+            }
+        Eigen::Matrix<float, points_num_ * 2, 1> delta_points;
+        Eigen::Matrix<float, 2, 1> delta_ee;
+        // Note poits_[0] is current value, points_[1] stores previous value due to swap() in LK algorithm.
+        for (int i = 0; i < points_num_; i++) {
+            delta_points(2 * i, 0) = points_[0][i].x - points_[1][i].x;
+            delta_points(2 * i + 1, 0) = points_[0][i].y - points_[1][i].y; 
+        }
+        delta_ee(0, 0) = ee_points_[0][0].x - ee_points_[1][0].x;
+        delta_ee(1, 0) = ee_points_[0][0].y - ee_points_[1][0].y;
+
+        if (delta_ee.norm() < 0.01) {
+            cur_Jd_ = pre_Jd_;
+            return;
+        }
+
+        cur_Jd_ = pre_Jd_ + update_rate_ * (delta_points - pre_Jd_*delta_ee) / delta_ee.squaredNorm() * delta_ee.transpose();
+        pre_Jd_ = cur_Jd_;
+    }
 };
 
 

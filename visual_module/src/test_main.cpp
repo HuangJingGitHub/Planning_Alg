@@ -16,7 +16,7 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     try {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     }
-    catch(cv_bridge::Exception& execption_type) {
+    catch (cv_bridge::Exception& execption_type) {
         ROS_ERROR("cv_bridge exception: %s", execption_type.what());
         return;
     }
@@ -24,7 +24,10 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     Mat cur_gray_img;
     cvtColor(cv_ptr->image, cur_gray_img, COLOR_BGR2GRAY); 
     tracker.Track(cv_ptr->image, cur_gray_img);   
-    
+    tracker.UpdateJd();
+    cout << "Jd(6 x 2):\n" 
+         << tracker.cur_Jd_ << '\n';
+
     imshow(kWindowName, cv_ptr->image);
     waitKey(2);
 }
@@ -37,7 +40,6 @@ int main(int argc, char** argv) {
     ros::NodeHandle node_handle;
     image_transport::ImageTransport img_transport(node_handle);
     image_transport::Subscriber img_subscriber = img_transport.subscribe(ros_image_stream, 30, ProcessImg);
-    
     ros::spin();
 
     return 0;
