@@ -22,7 +22,7 @@ public:
         int FPS = monocular_cam.get(CAP_PROP_FPS);
         cout << "This is the 2D view.\n"
              << "Frame size of camera: " << img_width << " x " << img_height << '\n'
-             << "Frame rate of monocamera: "  << FPS << '\n';
+             << "FPS of monocamera: "  << FPS << '\n';
 
         ros::NodeHandle node_handle;
         image_transport::ImageTransport image_transport(node_handle);

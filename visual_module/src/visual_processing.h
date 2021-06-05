@@ -1,5 +1,9 @@
+#ifndef VISUAL_PROCESSING_HEADER
+#define VISUAL_PROCESSING_HEADER
+
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/video/tracking.hpp>
@@ -29,7 +33,7 @@ class LK_Tracker {
 public: 
     string window_to_track_;
     TermCriteria termiantion_criteria_;
-    static const int points_num_ = 3;  // Determination of Jd size needs a constexpr
+    static const int points_num_ = 3;  // Determination of Jd size needs a constexpr argument.
     vector<Point2f> points_[2];
     vector<Point2f> ee_points_[2];
     Scalar points_color_;
@@ -123,7 +127,7 @@ public:
         delta_ee(0, 0) = ee_points_[0][0].x - ee_points_[1][0].x;
         delta_ee(1, 0) = ee_points_[0][0].y - ee_points_[1][0].y;
 
-        if (delta_ee.norm() < 0.01) {
+        if (delta_ee.norm() < 0.05) {
             cur_Jd_ = pre_Jd_;
             return;
         }
@@ -136,18 +140,28 @@ public:
 
 class ImgExtractor {
 public:
+    Mat original_HSV_img_;
     Scalar DO_HSV_low_;
     Scalar DO_HSV_high_;
-    Mat original_HSV_img_;
+    Scalar obs_HSV_low_;
+    Scalar obs_HSV_high_;
     vector<vector<Point>> DO_contours_;
-    vector<Point> DO_contour_; 
+    vector<Point> DO_contour_;
+    vector<vector<Point>> obs_contours_;
     int largest_DO_countor_idx_ = 0;
+    int obs_num_preset_;
+    bool obs_extracted_times_ = 0;
     bool DO_extract_succeed_ = false;
-    bool extract_succeed_ = false;
+    bool obs_extract_succeed_ = false;
     
-    ImgExtractor() {
+
+    ImgExtractor() {}
+    ImgExtractor(int obs_num) {
         DO_HSV_low_ = Scalar(142, 96, 72);
         DO_HSV_high_ = Scalar(180, 255, 255);
+        obs_HSV_low_ = Scalar(0, 0, 0);
+        obs_HSV_high_ = Scalar(255, 255, 255);
+        obs_num_preset_ = obs_num;
     }
 
     void Extract(Mat& image, Mat& HSV_img, Mat& gray, Mat& prevGray, int occlusion = 0) {
@@ -162,7 +176,7 @@ public:
         Moments m_dst = moments(destination_img, true);
         //cout << m_dst.m00 <<" " << m_dst.m10 << " " << m_dst.m01 << "\n";
         if (m_dst.m00 < 5000) {
-            cout << "No DO Detected!\n";
+            cout << "No DO detected!\n";
             DO_extract_succeed_ = false;
         }
         else {
@@ -185,6 +199,40 @@ public:
             DO_contour_.insert(DO_contour_.end(), DO_contours_[second_largetst_countor_idx].begin(), DO_contours_[second_largetst_countor_idx].end());
             DO_contours_[largest_DO_countor_idx_] = DO_contour_; 
         }
-        extract_succeed_ = DO_extract_succeed_;
+
+        if (obs_extracted_times_ < 30) {
+            inRange(original_HSV_img_, obs_HSV_low_, obs_HSV_high_, destination_img);
+            m_dst = moments(destination_img, true);
+            if (m_dst.m00 < 3000) {
+                cout << "No obstacles detected!\n";
+                obs_extract_succeed_ = false;
+            }
+            else {
+                vector<vector<Point>> cur_obs_contours;
+                findContours(destination_img, cur_obs_contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE, Point(0, 0));
+                if (cur_obs_contours.size() >= obs_num_preset_) {
+                    vector<pair<int, int>> size_idx_pairs;
+                    for (int i = 0; i < cur_obs_contours.size(); i++)
+                        size_idx_pairs.push_back(pair<int, int>(cur_obs_contours[i].size(), i));
+                    std::sort(size_idx_pairs.begin(), size_idx_pairs.end());
+                    if (obs_contours_.empty()) {
+                        for (int i = 0; i < obs_num_preset_; i++)
+                            obs_contours_.push_back(cur_obs_contours[size_idx_pairs[i].second]);
+                    }
+                    else {
+                        for (int i = 0; i < obs_num_preset_; i++) {
+                            obs_contours_[i] = cur_obs_contours[size_idx_pairs[i].second];
+                            /*Averaging operation is hard to define (find correspinding point pair, 
+                            dimensional difference, etc). Instead, use the updated data after 
+                            sufficient iterations.*/
+                            obs_extract_succeed_ = true;
+                        }
+                    }
+                }
+            }
+        }
+
     }
 };
+
+#endif
