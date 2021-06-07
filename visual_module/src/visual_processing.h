@@ -1,5 +1,5 @@
-#ifndef VISUAL_PROCESSING_HEADER
-#define VISUAL_PROCESSING_HEADER
+#ifndef VISUAL_PROCESSING_INCLUDED
+#define VISUAL_PROCESSING_INCLUDED
 
 #include <string>
 #include <vector>
@@ -8,6 +8,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <eigen3/Eigen/Dense>
+#include "obstacles.h"
 
 using namespace std;
 using namespace cv;
@@ -84,8 +85,8 @@ public:
     } 
 
 
-    void InvokeLK(Mat& pre_gray_img, Mat& next_gray_img, vector<Point2f>& pre_pts, vector<Point2f>& next_pts,
-                Mat& display_img, Scalar& pt_color) {
+    void InvokeLK(Mat& pre_gray_img, Mat& next_gray_img, vector<Point2f>& pre_pts, 
+                    vector<Point2f>& next_pts, Mat& display_img, Scalar& pt_color) {
         vector<uchar> status;
         vector<float> error;
         if (pre_gray_img.empty())
@@ -140,7 +141,7 @@ public:
 
 class ImgExtractor {
 public:
-    Mat original_HSV_img_;
+    Mat HSV_img_;
     Scalar DO_HSV_low_;
     Scalar DO_HSV_high_;
     Scalar obs_HSV_low_;
@@ -148,31 +149,40 @@ public:
     vector<vector<Point>> DO_contours_;
     vector<Point> DO_contour_;
     vector<vector<Point>> obs_contours_;
+    vector<vector<Point>> obs_contours_approxDP_;
+    vector<PolygonObstacle> obs_polygons_;
+    vector<pair<Point, Point2f>> DO_to_obs_projections_;
     int largest_DO_countor_idx_ = 0;
     int obs_num_preset_;
-    bool obs_extracted_times_ = 0;
+    int obs_extracted_times_ = 0;
     bool DO_extract_succeed_ = false;
     bool obs_extract_succeed_ = false;
     
 
     ImgExtractor() {}
     ImgExtractor(int obs_num) {
-        DO_HSV_low_ = Scalar(142, 96, 72);
+        DO_HSV_low_ = Scalar(87, 254, 76);
         DO_HSV_high_ = Scalar(180, 255, 255);
         obs_HSV_low_ = Scalar(0, 0, 0);
         obs_HSV_high_ = Scalar(255, 255, 255);
         obs_num_preset_ = obs_num;
+        obs_contours_approxDP_ = vector<vector<Point>>(obs_num_preset_);
+        obs_polygons_ = vector<PolygonObstacle>(obs_num_preset_);
+        DO_to_obs_projections_ = vector<pair<Point, Point2f>>(obs_num_preset_);
     }
 
-    void Extract(Mat& image, Mat& HSV_img, Mat& gray, Mat& prevGray, int occlusion = 0) {
-        original_HSV_img_ = HSV_img;
-        if (original_HSV_img_.empty()) {
+
+    void Extract(Mat& input_image, int occlusion = 0) {
+        if (input_image.empty()) {
             cout << "Invalid image for extracting!\n";
             return;
         }
 
+        cvtColor(input_image, HSV_img_, COLOR_BGR2HSV);
+        GaussianBlur(HSV_img_, HSV_img_, Size(3, 3), 5, 5);
+
         Mat destination_img;
-        inRange(original_HSV_img_, DO_HSV_low_, DO_HSV_high_, destination_img);
+        inRange(HSV_img_, DO_HSV_low_, DO_HSV_high_, destination_img);
         Moments m_dst = moments(destination_img, true);
         //cout << m_dst.m00 <<" " << m_dst.m10 << " " << m_dst.m01 << "\n";
         if (m_dst.m00 < 5000) {
@@ -201,7 +211,7 @@ public:
         }
 
         if (obs_extracted_times_ < 30) {
-            inRange(original_HSV_img_, obs_HSV_low_, obs_HSV_high_, destination_img);
+            inRange(HSV_img_, obs_HSV_low_, obs_HSV_high_, destination_img);
             m_dst = moments(destination_img, true);
             if (m_dst.m00 < 3000) {
                 cout << "No obstacles detected!\n";
@@ -222,16 +232,57 @@ public:
                     else {
                         for (int i = 0; i < obs_num_preset_; i++) {
                             obs_contours_[i] = cur_obs_contours[size_idx_pairs[i].second];
+                            approxPolyDP(obs_contours_[i], obs_contours_approxDP_[i], 3, true);
+                            obs_polygons_[i] = PolygonObstacle(obs_contours_approxDP_[i]);
                             /*Averaging operation is hard to define (find correspinding point pair, 
                             dimensional difference, etc). Instead, use the updated data after 
                             sufficient iterations.*/
-                            obs_extract_succeed_ = true;
                         }
+                        obs_extract_succeed_ = true;
+                        obs_extracted_times_++;
                     }
                 }
             }
         }
+    }
 
+
+    void ProjectDOToObstacles() {
+        if (DO_contour_.empty() || obs_polygons_.empty()) {
+            cout << "No valid DO contour or obstacle available.\n";
+            return;
+        }
+        for (int i = 0; i < obs_num_preset_; i++) {
+            vector<pair<float, int>> distance_log;
+            int step = 10;
+            Point2f cur_pt;
+            float cur_distance, min_distance = FLT_MAX;
+            for (int idx = 0; idx < DO_contour_.size(); idx += step) {
+                cur_pt = Point2f(DO_contour_[idx].x, DO_contour_[idx].y);
+                float cur_distance = MinDistanceToObstacle(obs_polygons_[i], cur_pt);
+                distance_log.push_back(pair<float, int>(cur_distance, idx));
+            }
+            
+            std::sort(distance_log.begin(), distance_log.end());
+            for (int cnt = 0; cnt < distance_log.size() && cnt < 3; cnt++) {
+                int range_left = distance_log[cnt].second - step + 1,
+                    range_right = distance_log[cnt].second + step - 1;
+                if (range_left < 0)
+                    range_left = 0;
+                if (range_right >= DO_contour_.size())
+                    range_right = DO_contour_.size() - 1;
+
+                for ( ; range_left <= range_right; range_left++) {
+                    cur_pt = Point2f(DO_contour_[range_left].x, DO_contour_[range_left].y);
+                    cur_distance = MinDistanceToObstacle(obs_polygons_[i], cur_pt);
+                    if (cur_distance < min_distance) {
+                        min_distance = cur_distance;
+                        DO_to_obs_projections_[i].first = DO_contour_[range_left];
+                        DO_to_obs_projections_[i].second = obs_polygons_[i].min_distance_pt;
+                    }
+                }
+            }
+        }
     }
 };
 
