@@ -5,12 +5,17 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/highgui/highgui.hpp>
 #include "visual_processing.h"
+#include "path_smoothing.h"
 
 using namespace std;
 using namespace cv;
+
 const string kWindowName = "Main Window in test_main";
+bool path_set_planned = false;
 LK_Tracker tracker(kWindowName);
 ImgExtractor extractor(1);
+PathSetTracker path_set_tracker;
+vector<vector<Point2f>> path_set;
 
 void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     cv_bridge::CvImagePtr cv_ptr;
@@ -23,19 +28,41 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     }
 
     Mat cur_gray_img;
+    vector<Point2f> projection_pts_on_path_set;
     cvtColor(cv_ptr->image, cur_gray_img, COLOR_BGR2GRAY); 
+    
     tracker.Track(cv_ptr->image, cur_gray_img);   
     tracker.UpdateJd();
     cout << "Jd(6 x 2):\n" 
          << tracker.cur_Jd_ << '\n';
-
     extractor.Extract(cv_ptr->image);
+    
+    if (!path_set_planned && extractor.obs_extract_succeed_) {
+        int pivot_idx = 0;
+        float feedback_pts_radius = 10;
+        vector<Point2f> initial_feedback_pts = tracker.GetFeedbackPoints(),
+                        target_feedback_pts;
+        target_feedback_pts = initial_feedback_pts;
+        for (Point2f& pt : target_feedback_pts)
+            pt += Point2f(100, 100);
+
+        if (!initial_feedback_pts.empty()) {
+            path_set = GeneratePathSet(initial_feedback_pts, target_feedback_pts, pivot_idx, feedback_pts_radius,
+                                        extractor.obs_polygons_, cv_ptr->image);
+            path_set_planned = !path_set.empty();
+            if (path_set_planned)
+                path_set_tracker = PathSetTracker(path_set);
+        }
+    }
+    else if (path_set_planned)
+        projection_pts_on_path_set = path_set_tracker.ProjectPtsToPathSet(tracker.GetFeedbackPoints());
+
+
     if (extractor.DO_extract_succeed_)
         drawContours(cv_ptr->image, extractor.DO_contours_, extractor.largest_DO_countor_idx_, Scalar(0, 255, 0), 2);
     if (extractor.obs_extract_succeed_)
         drawContours(cv_ptr->image, extractor.obs_contours_, 0, Scalar(0, 0, 255), 2);
     extractor.ProjectDOToObstacles();
-
     line(cv_ptr->image, extractor.DO_to_obs_projections_[0].first, 
         extractor.DO_to_obs_projections_[0].second, Scalar(0, 0, 255), 2);
     imshow(kWindowName, cv_ptr->image);

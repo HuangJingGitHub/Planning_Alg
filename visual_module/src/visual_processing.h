@@ -136,6 +136,15 @@ public:
         cur_Jd_ = pre_Jd_ + update_rate_ * (delta_points - pre_Jd_*delta_ee) / delta_ee.squaredNorm() * delta_ee.transpose();
         pre_Jd_ = cur_Jd_;
     }
+
+    
+    vector<Point2f> GetFeedbackPoints() {
+        if (points_[0].size() != points_num_) {
+            cout << "Less feedback points than expected.\n";
+            return {};
+        }
+        return points_[0];
+    }
 };
 
 
@@ -151,7 +160,7 @@ public:
     vector<vector<Point>> obs_contours_;
     vector<vector<Point>> obs_contours_approxDP_;
     vector<PolygonObstacle> obs_polygons_;
-    vector<pair<Point, Point2f>> DO_to_obs_projections_;
+    vector<pair<Point2f, Point2f>> DO_to_obs_projections_;
     int largest_DO_countor_idx_ = 0;
     int obs_num_preset_;
     int obs_extracted_times_ = 0;
@@ -168,7 +177,7 @@ public:
         obs_num_preset_ = obs_num;
         obs_contours_approxDP_ = vector<vector<Point>>(obs_num_preset_);
         obs_polygons_ = vector<PolygonObstacle>(obs_num_preset_);
-        DO_to_obs_projections_ = vector<pair<Point, Point2f>>(obs_num_preset_);
+        DO_to_obs_projections_ = vector<pair<Point2f, Point2f>>(obs_num_preset_);
     }
 
 
@@ -184,8 +193,7 @@ public:
         Mat destination_img;
         inRange(HSV_img_, DO_HSV_low_, DO_HSV_high_, destination_img);
         Moments m_dst = moments(destination_img, true);
-        //cout << m_dst.m00 <<" " << m_dst.m10 << " " << m_dst.m01 << "\n";
-        if (m_dst.m00 < 5000) {
+        if (m_dst.m00 < 3000) {
             cout << "No DO detected!\n";
             DO_extract_succeed_ = false;
         }
@@ -238,8 +246,9 @@ public:
                             dimensional difference, etc). Instead, use the updated data after 
                             sufficient iterations.*/
                         }
-                        obs_extract_succeed_ = true;
                         obs_extracted_times_++;
+                        if (obs_extracted_times_ == 30)
+                            obs_extract_succeed_ = true;
                     }
                 }
             }
@@ -254,7 +263,7 @@ public:
         }
         for (int i = 0; i < obs_num_preset_; i++) {
             vector<pair<float, int>> distance_log;
-            int step = 10;
+            int step = (DO_contour_.size() <= 25) ? 1 : DO_contour_.size() / 25;
             Point2f cur_pt;
             float cur_distance, min_distance = FLT_MAX;
             for (int idx = 0; idx < DO_contour_.size(); idx += step) {
@@ -277,7 +286,7 @@ public:
                     cur_distance = MinDistanceToObstacle(obs_polygons_[i], cur_pt);
                     if (cur_distance < min_distance) {
                         min_distance = cur_distance;
-                        DO_to_obs_projections_[i].first = DO_contour_[range_left];
+                        DO_to_obs_projections_[i].first = Point2f(DO_contour_[range_left].x, DO_contour_[range_left].y);
                         DO_to_obs_projections_[i].second = obs_polygons_[i].min_distance_pt;
                     }
                 }
@@ -286,4 +295,57 @@ public:
     }
 };
 
+
+class PathSetTracker {
+public:
+    vector<vector<Point2f>> path_set_;
+    vector<vector<float>> path_accumulated_lengths_;
+    int path_num_;
+    vector<int> min_distance_indices_;
+    vector<int> tracked_indices_log_;
+
+    PathSetTracker() {}
+    PathSetTracker(vector<vector<Point2f>> input_path_set) {
+            path_set_ = input_path_set;
+            path_num_ = input_path_set.size();
+            min_distance_indices_ = vector<int>(path_num_, 0);
+            tracked_indices_log_ = vector<int>(path_num_, 0);
+            
+            path_accumulated_lengths_ = vector<vector<float>>(path_num_);
+            for (int i = 0; i < path_set_.size(); i++) {
+                path_accumulated_lengths_[i] = vector<float>(path_set_[i].size(), 0.0);
+                for (int idx = 1; idx < path_set_[i].size(); idx++) {
+                    path_accumulated_lengths_[i][idx] = path_accumulated_lengths_[i][idx - 1] 
+                                                        + cv::norm(path_set_[i][idx] - path_set_[i][idx - 1]);
+                }
+            }
+    }
+
+    vector<Point2f> ProjectPtsToPathSet(vector<Point2f> cur_points) {
+        vector<Point2f> res(path_num_, Point2f(0, 0));
+        if (cur_points.size() != path_num_) {
+            cout << "Dimensions of feedback points and path set do not match with path set size: "
+                 << path_set_.size() 
+                 << "\n feedback points size: "
+                 << cur_points.size() << "\n";
+            return res;
+        }
+
+        for (int i = 0; i < path_num_; i++) {
+            float cur_distance, min_distance = FLT_MAX;
+            int start_idx = tracked_indices_log_[i];
+            for (; start_idx < path_set_[i].size(); start_idx++) {
+                cur_distance = cv::norm(cur_points[i] - path_set_[i][start_idx]);
+                if (cur_distance < min_distance) {
+                    min_distance = cur_distance;
+                    min_distance_indices_[i] = start_idx;
+                }
+            }
+            res[i] = path_set_[i][min_distance_indices_[i]];
+            tracked_indices_log_[i] = min_distance_indices_[i];
+        }
+        return res;
+    }
+
+};
 #endif
