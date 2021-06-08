@@ -38,7 +38,7 @@ public:
     Size2f config_size_;
     RRTStarNode* graph_start_;
     RRTStarNode* graph_end_;
-    int MAX_GRAPH_SIZE = 5000;
+    int MAX_GRAPH_SIZE = 20000;
     int CUR_GRAPH_SIZE = 0;
     bool plan_scuess_ = false;
 

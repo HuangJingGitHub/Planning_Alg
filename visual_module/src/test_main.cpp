@@ -44,18 +44,24 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
                         target_feedback_pts;
         target_feedback_pts = initial_feedback_pts;
         for (Point2f& pt : target_feedback_pts)
-            pt += Point2f(100, 100);
+            pt += Point2f(200, 200);
 
+        vector<PolygonObstacle> empty_obs;
         if (!initial_feedback_pts.empty()) {
             path_set = GeneratePathSet(initial_feedback_pts, target_feedback_pts, pivot_idx, feedback_pts_radius,
-                                        extractor.obs_polygons_, cv_ptr->image);
+                                        empty_obs, cv_ptr->image);
             path_set_planned = !path_set.empty();
             if (path_set_planned)
                 path_set_tracker = PathSetTracker(path_set);
         }
     }
-    else if (path_set_planned)
+    else if (path_set_planned) {
         projection_pts_on_path_set = path_set_tracker.ProjectPtsToPathSet(tracker.GetFeedbackPoints());
+        for (auto& path : path_set) {
+            for (int i = 0; i < int(path.size() - 1); i++)
+                line(cv_ptr->image, path[i], path[i + 1], Scalar(120, 150, 120), 2);
+        }
+    }
 
 
     if (extractor.DO_extract_succeed_)
