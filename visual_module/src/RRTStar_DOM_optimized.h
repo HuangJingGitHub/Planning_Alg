@@ -17,6 +17,11 @@
 using namespace cv;
 using namespace std;
 
+float normSqr(Point2f pt) {
+    return pt.x * pt.x + pt.y * pt.y;
+}
+
+
 struct RRTStarNode {
     Point2f pos;
     float cost;
@@ -43,7 +48,7 @@ public:
     bool plan_scuess_ = false;
 
     RRTStarPlanner(): graph_start_(nullptr), graph_end_(nullptr) {}
-    RRTStarPlanner(Point2f start, Point2f target, vector<PolygonObstacle> obs, float step_len = 10, 
+    RRTStarPlanner(Point2f start, Point2f target, vector<PolygonObstacle> obs, float step_len = 15, 
                    float radius = 10, float error_dis = 10,
                    Size2f config_size = Size2f(640, 480)): 
         start_pos_(start), 
@@ -90,7 +95,7 @@ public:
                         continue;
 
                 Rewire(nearest_node, new_node, source_img);
-                if (norm(new_node->pos - target_pos_) <= error_dis_) {
+                if (cv::norm(new_node->pos - target_pos_) <= error_dis_) {
                     if (new_node->cost + cv::norm(graph_end_->pos - new_node->pos) < min_cost) {
                         graph_end_->parent = new_node;
                         min_cost = new_node->cost + cv::norm(graph_end_->pos - new_node->pos);
@@ -124,7 +129,7 @@ public:
         RRTStarNode* res = graph_start_;
         queue<RRTStarNode*> level_pt;
         level_pt.push(graph_start_);
-        float min_dis = cv::norm(rand_node - graph_start_->pos), cur_dis;
+        float min_dis = normSqr(rand_node - graph_start_->pos), cur_dis;
         
         // bfs
         while (!level_pt.empty()) {
@@ -135,7 +140,7 @@ public:
                 for (auto pt : cur_node->adjacency_list) {
                     level_pt.push(pt);
                 }
-                cur_dis = cv::norm(rand_node - cur_node->pos);
+                cur_dis = normSqr(rand_node - cur_node->pos);
                 if (cur_dis < min_dis) {
                     res = cur_node;
                     min_dis = cur_dis;
@@ -146,7 +151,7 @@ public:
     }
 
     RRTStarNode* AddNewNode(RRTStarNode* nearest_node, Point2f& rand_pos) {
-        Point2f direction = (rand_pos - nearest_node->pos) / norm((rand_pos - nearest_node->pos));
+        Point2f direction = (rand_pos - nearest_node->pos) / cv::norm((rand_pos - nearest_node->pos));
         Point2f new_pos = nearest_node->pos + direction * step_len_;
         RRTStarNode* new_node = new RRTStarNode(new_pos);
         // RRTStarNode* new_node = new RRTStarNode(rand_pos);
@@ -169,7 +174,7 @@ public:
                 level_pt.pop();
                 for (auto pt : cur_node->adjacency_list)
                     level_pt.push(pt);
-                if (cv::norm(cur_node->pos - new_node->pos) <= radius_alg)
+                if (normSqr(cur_node->pos - new_node->pos) <= radius_alg * radius_alg)
                     near_set.push_back(cur_node);
             }
         }

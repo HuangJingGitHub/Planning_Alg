@@ -2,7 +2,7 @@
 #define PATH_SMOOTHING_INCLUDED
 
 #include <eigen3/Eigen/Dense>
-#include "RRTStar_DOM_debug.h"
+#include "RRTStar_DOM_optimized.h"
 
 using namespace Eigen;
 
