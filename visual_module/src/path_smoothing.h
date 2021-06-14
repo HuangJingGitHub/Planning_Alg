@@ -94,8 +94,10 @@ vector<vector<Point2f>> GeneratePathSet(vector<Point2f>& initial_feedback_pts,
     RRTStarPlanner planner(initial_feedback_pts[pivot_idx], target_feedback_pts[pivot_idx],
                             obs);
     bool plan_success = planner.Plan(source_img, feedback_pts_radius, true);
-    if (!plan_success)
+    if (!plan_success) {
+        cout << "Path planning failed!\n";
         return res_path_set;
+    }
 
     vector<RRTStarNode*> pivot_path = planner.GetPath();
     vector<RRTStarNode*> sparse_pivot_path;
@@ -119,6 +121,42 @@ vector<vector<Point2f>> GeneratePathSet(vector<Point2f>& initial_feedback_pts,
         }
     }
     return res_path_set; 
+}
+
+vector<float>  GetLocalPathWidth2D( vector<Point2f>& path, 
+                                    vector<PolygonObstacle>& obstacles,
+                                    Size2f config_size = Size2f(640, 480)) {
+    vector<float> local_path_width(path.size(), 0);
+    float slope, x_max = config_size.width, y_max = config_size.height,
+          cur_x, cur_y,
+          x_intercept, y_intercept,
+          x_max_intercept, y_max_intercept;
+
+    for (int i = 1; i < path.size() - 1; i++) {
+        cur_x = path[i].x;
+        cur_y = path[i].y;
+        slope = -(path[i + 1].x - path[i - 1].x) / (path[i + 1].y - path[i - 1].y);
+        vector<Point2f> boundary_insection_pts;
+
+        y_intercept = cur_x + slope * (0 - cur_x);
+        if (0 <= y_intercept && y_intercept <= y_max)
+            boundary_insection_pts.push_back(Point2f(0, y_intercept));
+        x_intercept = (1 - 1 / slope) * cur_x;
+        if (0 <= x_intercept && x_intercept <= x_max)
+            boundary_insection_pts.push_back(Point2f(x_intercept, 0));
+        y_max_intercept = (1 - 1 / slope) * cur_x + y_max / slope;
+        if (0 <= y_max_intercept && y_max_intercept <= x_max)
+            boundary_insection_pts.push_back(Point2f(y_max_intercept, y_max));
+        x_max_intercept = cur_x + slope * (x_max - cur_x);
+        if (0 <= x_max_intercept && x_max_intercept <= y_max)
+            boundary_insection_pts.push_back(Point2f(x_max, x_max_intercept));
+        
+        Point2f end_pt1 = boundary_insection_pts[0], end_pt2 = boundary_insection_pts[1];
+        if (obstacleFreeVec(obstacles, end_pt1, end_pt2))
+            local_path_width[i] = cv::norm(end_pt1 - end_pt2);
+        
+        return local_path_width;
+    }
 }
 
 #endif

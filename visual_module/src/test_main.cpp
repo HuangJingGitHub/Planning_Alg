@@ -22,8 +22,8 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     try {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
     }
-    catch (cv_bridge::Exception& execption_type) {
-        ROS_ERROR("cv_bridge exception: %s", execption_type.what());
+    catch (cv_bridge::Exception& exception_type) {
+        ROS_ERROR("cv_bridge exception: %s", exception_type.what());
         return;
     }
 
@@ -37,23 +37,20 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
          << tracker.cur_Jd_ << '\n';
     extractor.Extract(cv_ptr->image);
     
-    if (!path_set_planned && extractor.obs_extract_succeed_) {
+    vector<Point2f> initial_feedback_pts = tracker.GetFeedbackPoints();
+    if (!path_set_planned && (!initial_feedback_pts.empty()) && extractor.obs_extract_succeed_) {
         int pivot_idx = 0;
         float feedback_pts_radius = 10;
-        vector<Point2f> initial_feedback_pts = tracker.GetFeedbackPoints(),
-                        target_feedback_pts;
-        target_feedback_pts = initial_feedback_pts;
+        vector<Point2f> target_feedback_pts = initial_feedback_pts;
         for (Point2f& pt : target_feedback_pts)
             pt += Point2f(200, 200);
-
         vector<PolygonObstacle> empty_obs;
-        if (!initial_feedback_pts.empty()) {
-            path_set = GeneratePathSet(initial_feedback_pts, target_feedback_pts, pivot_idx, feedback_pts_radius,
-                                        empty_obs, cv_ptr->image);
-            path_set_planned = !path_set.empty();
-            if (path_set_planned)
-                path_set_tracker = PathSetTracker(path_set);
-        }
+        
+        path_set = GeneratePathSet(initial_feedback_pts, target_feedback_pts, pivot_idx, feedback_pts_radius,
+                                    empty_obs, cv_ptr->image);
+        path_set_planned = !path_set.empty();
+        if (path_set_planned)
+            path_set_tracker = PathSetTracker(path_set);  
     }
     else if (path_set_planned) {
         projection_pts_on_path_set = path_set_tracker.ProjectPtsToPathSet(tracker.GetFeedbackPoints());
@@ -74,6 +71,7 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     imshow(kWindowName, cv_ptr->image);
     waitKey(2);
 }
+
 
 int main(int argc, char** argv) {
     string ros_image_stream = "cameras/source_camera/image";

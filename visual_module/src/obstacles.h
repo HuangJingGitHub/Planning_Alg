@@ -11,6 +11,10 @@
 using namespace cv;
 using namespace std;
 
+float normSqr(Point2f pt) {
+    return pt.x * pt.x + pt.y * pt.y;
+}
+
 struct PolygonObstacle {
     bool closed;
     vector<Point2f> vertices;
@@ -83,6 +87,13 @@ bool ObstacleFree(PolygonObstacle& obs, Point2f p1, Point2f p2) {
     return true;
 }
 
+bool obstacleFreeVec(vector<PolygonObstacle>& obs, Point2f p1, Point2f p2) {
+    for (PolygonObstacle& obstacle : obs)
+        if (!ObstacleFree(obstacle, p1, p2))
+            return false;
+    return true;
+}
+
 float MinDistanceToObstacle(PolygonObstacle& obs, Point2f testPt) {
     float res = FLT_MAX, cur_distance;
     int step_num = 50;
@@ -93,7 +104,7 @@ float MinDistanceToObstacle(PolygonObstacle& obs, Point2f testPt) {
         side_vec = end_vertex - start_vertex;
         for (int i = 0; i <= step_num; i++) {
             cur_interpolation_pos = start_vertex + side_vec * i / step_num;
-            cur_distance = norm(testPt - cur_interpolation_pos);
+            cur_distance = normSqr(testPt - cur_interpolation_pos);
             if (cur_distance < res) {
                 res = cur_distance;
                 obs.min_distance_pt = cur_interpolation_pos;
@@ -106,14 +117,14 @@ float MinDistanceToObstacle(PolygonObstacle& obs, Point2f testPt) {
         side_vec = end_vertex - start_vertex;
         for (int i = 0; i <= step_num; i++) {
             cur_interpolation_pos = start_vertex + side_vec * i / step_num;
-            cur_distance = norm(testPt - cur_interpolation_pos);
+            cur_distance = normSqr(testPt - cur_interpolation_pos);
             if (cur_distance < res) {
                 res = cur_distance;
                 obs.min_distance_pt = cur_interpolation_pos;
             }
         }       
     }
-    return res;
+    return sqrt(res);
 }
 
 float MinDistanceToObstaclesVec(vector<PolygonObstacle>& obstacles, Point2f testPt) {
