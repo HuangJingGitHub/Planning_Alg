@@ -20,7 +20,7 @@ private:
     image_transport::Subscriber image_subscriber_;
 
     const string kWindowName = "Main Window in test_main";
-    Mat cur_gray_img_;
+    // Mat cur_gray_img_;
     bool path_set_planned_ = false;
     LK_Tracker tracker_;
     ImgExtractor extractor_;
@@ -51,12 +51,12 @@ public:
             ROS_ERROR("cv_bridge exception: %s", exception_type.what());
             return;
         }
-
+        Mat cur_gray_img_;
         cvtColor(cv_ptr->image, cur_gray_img_, COLOR_BGR2GRAY); 
         
         tracker_.Track(cv_ptr->image, cur_gray_img_);   
         tracker_.UpdateJd();
-        cout << "Jd(6 x 2):\n" 
+        cout << "Jd(2 x 2):\n" 
             << tracker_.cur_Jd_ << '\n';
         extractor_.Extract(cv_ptr->image);
         
