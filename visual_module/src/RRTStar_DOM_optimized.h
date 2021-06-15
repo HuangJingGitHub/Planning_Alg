@@ -17,10 +17,6 @@
 using namespace cv;
 using namespace std;
 
-float normSqr(Point2f pt) {
-    return pt.x * pt.x + pt.y * pt.y;
-}
-
 
 struct RRTStarNode {
     Point2f pos;

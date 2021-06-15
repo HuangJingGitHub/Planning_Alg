@@ -77,6 +77,7 @@ bool SegmentIntersection(Point2f& p1, Point2f& p2, Point2f& q1, Point2f& q2) {
 bool ObstacleFree(PolygonObstacle& obs, Point2f p1, Point2f p2) {
     if (obs.vertices.size() <= 1)
         return true;
+    
     for (int i = 0; i < obs.vertices.size() - 1; i++) {
         if (SegmentIntersection(obs.vertices[i], obs.vertices[i + 1], p1, p2))
             return false;
@@ -94,10 +95,47 @@ bool obstacleFreeVec(vector<PolygonObstacle>& obs, Point2f p1, Point2f p2) {
     return true;
 }
 
+Point2f GetClosestIntersectionPt(PolygonObstacle& obs, Point2f p1, Point2f p2, Point2f testPt) {
+    Point2f res = Point2f(0, 0);
+    if (obs.vertices.size() <= 1) {
+        cout << "Obstacle vertex number less than 1.\n";
+        return res;
+    }
+
+    if (obs.closed)
+        obs.vertices.push_back(obs.vertices.front());
+
+    float min_distance_sqr = FLT_MAX;
+    for (int i = 0; i < obs.vertices.size() - 1; i++) {
+        if (SegmentIntersection(obs.vertices[i], obs.vertices[i + 1], p1, p2)) {
+            float kp = (p2.y - p1.y) / (p2.x - p1.x),
+                  kq = (obs.vertices[i + 1].y - obs.vertices[i].y) / 
+                        (obs.vertices[i + 1].x - obs.vertices[i].x),
+                  x_p1 = p1.x, y_p1 = p1.y,
+                  x_q1 = obs.vertices[i].x, y_q1 = obs.vertices[i].y;
+            float x = (y_p1 - y_q1 - kp * x_p1 + kq * x_q1) / (kq - kp),
+                  y = y_p1 + kp * (x - x_p1);
+            Point2f cur_intersection_pt = Point2f(x, y);
+            if (normSqr(cur_intersection_pt - testPt) < min_distance_sqr) {
+                res = cur_intersection_pt;
+                min_distance_sqr = normSqr(cur_intersection_pt - testPt);
+            } 
+        }
+    }
+    
+    if (obs.closed)
+        obs.vertices.pop_back();
+    return res;
+} 
+
+
 float MinDistanceToObstacle(PolygonObstacle& obs, Point2f testPt) {
     float res = FLT_MAX, cur_distance;
     int step_num = 50;
     Point2f start_vertex, end_vertex, cur_interpolation_pos, side_vec;
+    
+    if (obs.closed)
+        obs.vertices.push_back(obs.vertices.front());
     for (int i = 0; i < obs.vertices.size() - 1; i++) {
         start_vertex = obs.vertices[i];
         end_vertex = obs.vertices[i + 1];
@@ -111,19 +149,9 @@ float MinDistanceToObstacle(PolygonObstacle& obs, Point2f testPt) {
             }
         }
     }
-    if (obs.closed) {
-        start_vertex = obs.vertices.front();
-        end_vertex = obs.vertices.back();
-        side_vec = end_vertex - start_vertex;
-        for (int i = 0; i <= step_num; i++) {
-            cur_interpolation_pos = start_vertex + side_vec * i / step_num;
-            cur_distance = normSqr(testPt - cur_interpolation_pos);
-            if (cur_distance < res) {
-                res = cur_distance;
-                obs.min_distance_pt = cur_interpolation_pos;
-            }
-        }       
-    }
+    
+    if (obs.closed) 
+        obs.vertices.pop_back();
     return sqrt(res);
 }
 

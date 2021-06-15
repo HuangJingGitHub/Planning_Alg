@@ -13,6 +13,7 @@
 using namespace std;
 using namespace cv;
 
+
 Point2f feedback_pt_picked;
 Point2f ee_pt_picked;
 bool add_remove_pt = false;
@@ -34,7 +35,7 @@ class LK_Tracker {
 public: 
     string window_to_track_;
     TermCriteria termiantion_criteria_;
-    static const int points_num_ = 3;  // Determination of Jd size needs a constexpr argument.
+    static const int points_num_ = 1;  // Determination of Jd size needs a constexpr argument.
     vector<Point2f> points_[2];
     vector<Point2f> ee_points_[2];
     Scalar points_color_;
@@ -65,8 +66,13 @@ public:
             vector<Point2f> temp;
             temp.push_back(feedback_pt_picked);
             cornerSubPix(next_gray_img_, temp, Size(11, 11), Size(-1, -1), termiantion_criteria_);
-            points_[0].push_back(temp[0]);
-            add_remove_pt = false;
+            for (auto& pt : points_[0])
+                if (cv::norm(temp[0] - pt) < 5)
+                    add_remove_pt = false;
+            if (add_remove_pt) {
+                points_[0].push_back(temp[0]);
+                add_remove_pt = false;
+            }
         }
         if (ee_add_remove_pt && ee_points_[0].empty()) {
             vector<Point2f> temp;
@@ -96,12 +102,6 @@ public:
                                 3, termiantion_criteria_, 0, 0.001);
         size_t i, k;
         for (i = k = 0; i < next_pts.size(); i++) {
-            if (add_remove_pt) {
-                if (norm(feedback_pt_picked - next_pts[i]) <= 5) {
-                    add_remove_pt = false;
-                    continue;
-                }
-            }
             if (!status[i])
                 continue;
             next_pts[k++] = next_pts[i];
@@ -258,7 +258,10 @@ public:
 
     void ProjectDOToObstacles() {
         if (DO_contour_.empty() || obs_polygons_.empty()) {
-            cout << "No valid DO contour or obstacle available.\n";
+            if (DO_contour_.empty())
+                cout << "No valid DO contour available.\n";
+            else
+                cout << "No obstacle detected.\n";
             return;
         }
         for (int i = 0; i < obs_num_preset_; i++) {
@@ -305,26 +308,26 @@ public:
     vector<int> tracked_indices_log_;
 
     PathSetTracker() {}
-    PathSetTracker(vector<vector<Point2f>> input_path_set) {
+    PathSetTracker(vector<vector<Point2f>>& input_path_set) {
             path_set_ = input_path_set;
             path_num_ = input_path_set.size();
             min_distance_indices_ = vector<int>(path_num_, 0);
             tracked_indices_log_ = vector<int>(path_num_, 0);
             
-            path_accumulated_lengths_ = vector<vector<float>>(path_num_);
+/*             path_accumulated_lengths_ = vector<vector<float>>(path_num_);
             for (int i = 0; i < path_set_.size(); i++) {
                 path_accumulated_lengths_[i] = vector<float>(path_set_[i].size(), 0.0);
                 for (int idx = 1; idx < path_set_[i].size(); idx++) {
                     path_accumulated_lengths_[i][idx] = path_accumulated_lengths_[i][idx - 1] 
                                                         + cv::norm(path_set_[i][idx] - path_set_[i][idx - 1]);
                 }
-            }
+            } */
     }
 
     vector<Point2f> ProjectPtsToPathSet(vector<Point2f> cur_points) {
         vector<Point2f> res(path_num_, Point2f(0, 0));
         if (cur_points.size() != path_num_) {
-            cout << "Dimensions of feedback points and path set do not match with path set size: "
+            cout << "Dimensions of feedback points and path set do not match. Path set size: "
                  << path_set_.size() 
                  << "\n feedback points size: "
                  << cur_points.size() << "\n";
@@ -332,12 +335,13 @@ public:
         }
 
         for (int i = 0; i < path_num_; i++) {
-            float cur_distance, min_distance = FLT_MAX;
+            float cur_distance_sqr, min_distance_sqr = FLT_MAX;
             int start_idx = tracked_indices_log_[i];
             for (; start_idx < path_set_[i].size(); start_idx++) {
-                cur_distance = cv::norm(cur_points[i] - path_set_[i][start_idx]);
-                if (cur_distance < min_distance) {
-                    min_distance = cur_distance;
+                // cur_distance = cv::norm(cur_points[i] - path_set_[i][start_idx]);
+                cur_distance_sqr = normSqr(cur_points[i] - path_set_[i][start_idx]);
+                if (cur_distance_sqr < min_distance_sqr) {
+                    min_distance_sqr = cur_distance_sqr;
                     min_distance_indices_[i] = start_idx;
                 }
             }

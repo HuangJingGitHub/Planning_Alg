@@ -189,6 +189,11 @@ vector<float>  GetLocalPathWidth2D( vector<Point2f>& path,
             local_path_width[i] = cv::norm(end_pt1 - end_pt2);
         }
     }
+
+    if (local_path_width.size() >= 2) {
+        local_path_width.front() = local_path_width[1];
+        local_path_width.back() = local_path_width[local_path_width.size() - 2];
+    }
     return local_path_width;
 }
 

@@ -5,7 +5,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/highgui/highgui.hpp>
 #include "visual_processing.h"
-#include "path_smoothing.h"
+#include "path_processing.h"
 
 using namespace std;
 using namespace cv;
@@ -16,6 +16,8 @@ LK_Tracker tracker(kWindowName);
 ImgExtractor extractor(1);
 PathSetTracker path_set_tracker;
 vector<vector<Point2f>> path_set;
+vector<vector<float>> path_local_width_set;
+
 
 void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
     cv_bridge::CvImagePtr cv_ptr;
@@ -44,13 +46,21 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
         vector<Point2f> target_feedback_pts = initial_feedback_pts;
         for (Point2f& pt : target_feedback_pts)
             pt += Point2f(200, 200);
-        vector<PolygonObstacle> empty_obs;
+
+        vector<Point2f> example_obs_vertices{Point2f(200, 0), Point2f(220, 0), Point2f(220, 100), Point2f(200, 100)};
+        PolygonObstacle example_obs = PolygonObstacle(example_obs_vertices);
+        vector<PolygonObstacle> example_obs_vec{example_obs};
         
         path_set = GeneratePathSet(initial_feedback_pts, target_feedback_pts, pivot_idx, feedback_pts_radius,
-                                    empty_obs, cv_ptr->image);
+                                    example_obs_vec, cv_ptr->image);
         path_set_planned = !path_set.empty();
-        if (path_set_planned)
-            path_set_tracker = PathSetTracker(path_set);  
+        if (path_set_planned) {
+            path_set_tracker = PathSetTracker(path_set);
+            for (vector<Point2f>& cur_path : path_set) {
+                vector<float> cur_path_local_width = GetLocalPathWidth2D(cur_path, example_obs_vec);
+                path_local_width_set.push_back(cur_path_local_width);
+            }
+        }
     }
     else if (path_set_planned) {
         projection_pts_on_path_set = path_set_tracker.ProjectPtsToPathSet(tracker.GetFeedbackPoints());
@@ -58,6 +68,8 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
             for (int i = 0; i < int(path.size() - 1); i++)
                 line(cv_ptr->image, path[i], path[i + 1], Scalar(120, 150, 120), 2);
         }
+        for (float width : path_local_width_set[0])
+            cout << width << '\n';
     }
 
 
@@ -75,7 +87,7 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
 
 int main(int argc, char** argv) {
     string ros_image_stream = "cameras/source_camera/image";
-    namedWindow(kWindowName);
+    // namedWindow(kWindowName);
     
     ros::init(argc, argv, "test_main");
     ros::NodeHandle node_handle;
