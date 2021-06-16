@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
   sensor_msgs
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -57,11 +58,12 @@ find_package(OpenCV REQUIRED)
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
+add_service_files(
+   FILES
+   visual_info_service_singlePt.srv
 #   Service1.srv
 #   Service2.srv
-# )
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -71,10 +73,10 @@ find_package(OpenCV REQUIRED)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+generate_messages(
+   DEPENDENCIES
+   std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -108,7 +110,7 @@ find_package(OpenCV REQUIRED)
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES visual_module
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+   CATKIN_DEPENDS roscpp rospy std_msgs message_runtime
 #  DEPENDS system_lib
 )
 
@@ -207,8 +209,24 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
-add_executable(${PROJECT_NAME}_source_camera src/source_camera.cpp)
-target_link_libraries(${PROJECT_NAME}_source_camera ${OpenCV_LIBS} ${catkin_LIBRARIES})
+add_executable(source_camera src/source_camera.cpp)
+target_link_libraries(source_camera ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
 add_executable(test_main src/test_main.cpp)
 target_link_libraries(test_main ${OpenCV_LIBS} ${catkin_LIBRARIES})
+
+add_executable(visual_core_server src/visual_service_singlePt.cpp)
+target_link_libraries(visual_core_server ${OpenCV_LIBS} ${catkin_LIBRARIES})
+add_dependencies(visual_core_server visual_module_gencpp)
+
+add_executable(service_client_test src/service_client_test.cpp)
+target_link_libraries(service_client_test ${OpenCV_LIBS} ${catkin_LIBRARIES})
+add_dependencies(service_client_test visual_module_gencpp)
+
+add_executable(singlePt_main src/singlePt_manipulate_main.cpp)
+target_link_libraries(singlePt_main ${OpenCV_LIBS} ${catkin_LIBRARIES} ${PROJECT_SOURCE_DIR}/src/arm_include/libFvrEthernetClient.a pthread -lanl)
+add_dependencies(singlePt_main visual_module_gencpp)
+
+# add_executable(arm_example src/Flexiv_V2.5/example/main.cpp)
+# target_link_libraries(arm_example ${PROJECT_SOURCE_DIR}/src/Flexiv_V2.5/lib/libFvrEthernetClient.a pthread -lanl)
+
