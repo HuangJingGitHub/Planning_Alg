@@ -16,8 +16,10 @@ using namespace cv;
 
 Point2f feedback_pt_picked;
 Point2f ee_pt_picked;
+Point2f obs_vertex_picked;
 bool add_remove_pt = false;
 bool ee_add_remove_pt = false;  // ee: end-effector
+bool obs_add_remove_pt = false;
 
 static void onMouse(int event, int x, int y, int, void*) {
     if (event == EVENT_LBUTTONDOWN) {
@@ -27,7 +29,11 @@ static void onMouse(int event, int x, int y, int, void*) {
     if (event == EVENT_LBUTTONDBLCLK) {
         ee_pt_picked = Point2f((float)x, (float)y);
         ee_add_remove_pt = true;
-    }    
+    }
+    if (event == EVENT_RBUTTONDOWN) {
+        obs_vertex_picked = Point2f((float)x, (float)y);
+        obs_add_remove_pt = true;
+    }
 }
 
 
@@ -157,8 +163,6 @@ public:
     Scalar obs_HSV_high_;
     vector<vector<Point>> DO_contours_;
     vector<Point> DO_contour_;
-    vector<vector<Point>> obs_contours_;
-    vector<vector<Point>> obs_contours_approxDP_;
     vector<PolygonObstacle> obs_polygons_;
     vector<pair<Point2f, Point2f>> DO_to_obs_projections_;
     int largest_DO_countor_idx_ = 0;
@@ -166,22 +170,25 @@ public:
     int obs_extracted_times_ = 0;
     bool DO_extract_succeed_ = false;
     bool obs_extract_succeed_ = false;
+    string window_to_track_;
+    int obs_vertices_num_preset_ = 4;
+    vector<Point2f> obs_vertices_picked_;
     
 
     ImgExtractor() {}
-    ImgExtractor(int obs_num) {
+    ImgExtractor(int obs_num, const string win_name) {
+        obs_num_preset_ = obs_num;
+        window_to_track_ = win_name;
         DO_HSV_low_ = Scalar(87, 254, 76);
         DO_HSV_high_ = Scalar(180, 255, 255);
         obs_HSV_low_ = Scalar(0, 0, 0);
         obs_HSV_high_ = Scalar(255, 255, 255);
-        obs_num_preset_ = obs_num;
-        obs_contours_approxDP_ = vector<vector<Point>>(obs_num_preset_);
-        obs_polygons_ = vector<PolygonObstacle>(obs_num_preset_);
         DO_to_obs_projections_ = vector<pair<Point2f, Point2f>>(obs_num_preset_);
     }
 
 
     void Extract(Mat& input_image, int occlusion = 0) {
+        // setMouseCallback(window_to_track_, onMouse, 0);
         if (input_image.empty()) {
             cout << "Invalid image for extracting!\n";
             return;
@@ -218,40 +225,16 @@ public:
             DO_contours_[largest_DO_countor_idx_] = DO_contour_; 
         }
 
-        if (obs_extracted_times_ < 30) {
-            inRange(HSV_img_, obs_HSV_low_, obs_HSV_high_, destination_img);
-            m_dst = moments(destination_img, true);
-            if (m_dst.m00 < 3000) {
-                cout << "No obstacles detected!\n";
-                obs_extract_succeed_ = false;
-            }
-            else {
-                vector<vector<Point>> cur_obs_contours;
-                findContours(destination_img, cur_obs_contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE, Point(0, 0));
-                if (cur_obs_contours.size() >= obs_num_preset_) {
-                    vector<pair<int, int>> size_idx_pairs;
-                    for (int i = 0; i < cur_obs_contours.size(); i++)
-                        size_idx_pairs.push_back(pair<int, int>(cur_obs_contours[i].size(), i));
-                    std::sort(size_idx_pairs.begin(), size_idx_pairs.end());
-                    if (obs_contours_.empty()) {
-                        for (int i = 0; i < obs_num_preset_; i++)
-                            obs_contours_.push_back(cur_obs_contours[size_idx_pairs[i].second]);
-                    }
-                    else {
-                        for (int i = 0; i < obs_num_preset_; i++) {
-                            obs_contours_[i] = cur_obs_contours[size_idx_pairs[i].second];
-                            approxPolyDP(obs_contours_[i], obs_contours_approxDP_[i], 3, true);
-                            obs_polygons_[i] = PolygonObstacle(obs_contours_approxDP_[i]);
-                            /*Averaging operation is hard to define (find correspinding point pair, 
-                            dimensional difference, etc). Instead, use the updated data after 
-                            sufficient iterations.*/
-                        }
-                        obs_extracted_times_++;
-                        if (obs_extracted_times_ == 30)
-                            obs_extract_succeed_ = true;
-                    }
-                }
-            }
+
+        if (obs_add_remove_pt && obs_vertices_picked_.size() < obs_vertices_num_preset_) {
+            obs_vertices_picked_.push_back(obs_vertex_picked);
+            obs_add_remove_pt = false;
+            circle(input_image, obs_vertex_picked, 3, Scalar(0, 0, 255), -1, 8);
+        }
+        else if (!obs_extract_succeed_ && obs_vertices_picked_.size() == obs_vertices_num_preset_) {
+            obs_polygons_.push_back(PolygonObstacle(obs_vertices_picked_));
+            if (obs_polygons_.size() == obs_num_preset_)
+                obs_extract_succeed_ = true;
         }
     }
 

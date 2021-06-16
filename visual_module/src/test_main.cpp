@@ -13,7 +13,7 @@ using namespace cv;
 const string kWindowName = "Main Window in test_main";
 bool path_set_planned = false;
 LK_Tracker tracker(kWindowName);
-ImgExtractor extractor(1);
+ImgExtractor extractor(1, kWindowName);
 PathSetTracker path_set_tracker;
 vector<vector<Point2f>> path_set;
 vector<vector<float>> path_local_width_set;
@@ -75,8 +75,8 @@ void ProcessImg(const sensor_msgs::ImageConstPtr& msg) {
 
     if (extractor.DO_extract_succeed_)
         drawContours(cv_ptr->image, extractor.DO_contours_, extractor.largest_DO_countor_idx_, Scalar(0, 255, 0), 2);
-    if (extractor.obs_extract_succeed_)
-        drawContours(cv_ptr->image, extractor.obs_contours_, 0, Scalar(0, 0, 255), 2);
+/*     if (extractor.obs_extract_succeed_)
+        drawContours(cv_ptr->image, extractor.obs_contours_, 0, Scalar(0, 0, 255), 2); */
     extractor.ProjectDOToObstacles();
     line(cv_ptr->image, extractor.DO_to_obs_projections_[0].first, 
         extractor.DO_to_obs_projections_[0].second, Scalar(0, 0, 255), 2);
