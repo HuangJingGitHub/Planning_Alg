@@ -40,7 +40,7 @@ public:
     vector<Point2f> ee_points_[2];
     Scalar points_color_;
     Scalar ee_points_color_;
-    Mat pre_gary_img_;
+    Mat pre_gray_img_;
     Mat next_gray_img_;
 
     Eigen::MatrixXf pre_Jd_;
@@ -83,22 +83,22 @@ public:
         }
 
         if (!points_[0].empty())
-            InvokeLK(pre_gary_img_, next_gray_img_, points_[0], points_[1], image, points_color_);      
+            InvokeLK(points_[0], points_[1], image, points_color_);      
         if (!ee_points_[0].empty())
-            InvokeLK(pre_gary_img_, next_gray_img_, ee_points_[0], ee_points_[1], image, ee_points_color_);
+            InvokeLK(ee_points_[0], ee_points_[1], image, ee_points_color_);
 
-        cv::swap(pre_gary_img_, next_gray_img_);
+        // cv::swap(pre_gray_img_, next_gray_img_); // Will just change the data area img points to.
+        next_gray_img_.copyTo(pre_gray_img_);
     } 
 
 
-    void InvokeLK(Mat& pre_gray_img, Mat& next_gray_img, vector<Point2f>& pre_pts, 
-                    vector<Point2f>& next_pts, Mat& display_img, Scalar& pt_color) {
+    void InvokeLK(vector<Point2f>& pre_pts, vector<Point2f>& next_pts, Mat& display_img, Scalar& pt_color) {
         vector<uchar> status;
         vector<float> error;
-        if (pre_gray_img.empty())
-            next_gray_img.copyTo(pre_gray_img);
+        if (pre_gray_img_.empty())
+            next_gray_img_.copyTo(pre_gray_img_);
 
-        calcOpticalFlowPyrLK(pre_gray_img, next_gray_img, pre_pts, next_pts, status, error, Size(11, 11),
+        calcOpticalFlowPyrLK(pre_gray_img_, next_gray_img_, pre_pts, next_pts, status, error, Size(11, 11),
                                 3, termiantion_criteria_, 0, 0.001);
         size_t i, k;
         for (i = k = 0; i < next_pts.size(); i++) {
@@ -329,7 +329,7 @@ public:
         if (cur_points.size() != path_num_) {
             cout << "Dimensions of feedback points and path set do not match. Path set size: "
                  << path_set_.size() 
-                 << "\n feedback points size: "
+                 << "\nfeedback points size: "
                  << cur_points.size() << "\n";
             return res;
         }
