@@ -41,7 +41,7 @@ public:
     RRTStarNode* graph_end_;
     int MAX_GRAPH_SIZE = 10000;
     int CUR_GRAPH_SIZE = 0;
-    bool plan_scuess_ = false;
+    bool plan_success_ = false;
 
     RRTStarPlanner(): graph_start_(nullptr), graph_end_(nullptr) {}
     RRTStarPlanner(Point2f start, Point2f target, vector<PolygonObstacle> obs, float step_len = 15, 
