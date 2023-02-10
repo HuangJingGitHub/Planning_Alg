@@ -17,7 +17,6 @@
 using namespace cv;
 using namespace std;
 
-
 struct RRTStarNode {
     Point2f pos;
     float cost;
